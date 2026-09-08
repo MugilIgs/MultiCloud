@@ -3,6 +3,8 @@ package com.multicloud.multicloud_storage_api.controller;
 import com.multicloud.multicloud_storage_api.entity.FileMetadata;
 import com.multicloud.multicloud_storage_api.repository.FileRepository;
 import com.multicloud.multicloud_storage_api.service.StorageProvider;
+import com.multicloud.multicloud_storage_api.service.StorageProviderSelector;
+import com.multicloud.multicloud_storage_api.service.ReplicationService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -10,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.multicloud.multicloud_storage_api.service.EncryptionService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -20,15 +23,20 @@ public class FileController {
 
     private final FileRepository fileRepository;
     private final StorageProvider storageProvider;
+    private final EncryptionService encryptionService;
+    private final ReplicationService replicationService;
 
     public FileController(
             FileRepository fileRepository,
-            StorageProvider storageProvider
+            StorageProviderSelector storageProviderSelector,
+            EncryptionService encryptionService,
+            ReplicationService replicationService
     ) {
         this.fileRepository = fileRepository;
-        this.storageProvider = storageProvider;
+        this.storageProvider = storageProviderSelector.getProvider();
+        this.encryptionService = encryptionService;
+        this.replicationService = replicationService;
     }
-
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(
             @RequestParam("file") MultipartFile file,
@@ -45,8 +53,19 @@ public class FileController {
             String userEmail =
                     authentication.getName();
 
+            byte[] encryptedData =
+                    encryptionService.encrypt(file.getInputStream());
+
             String storedFilename =
-                    storageProvider.upload(file);
+                    storageProvider.upload(
+                            encryptedData,
+                            file.getOriginalFilename()
+                    );
+            replicationService.replicate(
+                    encryptedData,
+                    file.getOriginalFilename(),
+                    com.multicloud.multicloud_storage_api.service.StorageProviderType.AZURE
+            );
 
             FileMetadata metadata =
                     new FileMetadata();
@@ -129,15 +148,24 @@ public class FileController {
 
         try {
 
-            Resource resource =
+            Resource encryptedResource =
                     storageProvider.download(
                             file.getStoredFilename()
                     );
 
-            if (!resource.exists()) {
+            if (!encryptedResource.exists()) {
                 return ResponseEntity.notFound().build();
             }
 
+            byte[] decryptedData =
+                    encryptionService.decrypt(
+                            encryptedResource.getInputStream()
+                    );
+
+            Resource resource =
+                    new org.springframework.core.io.ByteArrayResource(
+                            decryptedData
+                    );
             String contentType =
                     file.getContentType();
 

@@ -15,18 +15,14 @@ public class LocalStorageProvider implements StorageProvider {
     private final Path uploadDirectory = Paths.get("uploads");
 
     @Override
-    public String upload(MultipartFile file) throws IOException {
+    public String upload(byte[] data, String filename) throws IOException {
 
-        Files.createDirectories(uploadDirectory);
+        Path targetLocation =
+                uploadDirectory.resolve(filename);
 
-        String storedFilename =
-                java.util.UUID.randomUUID() + "_" + file.getOriginalFilename();
+        Files.write(targetLocation, data);
 
-        Path destination = uploadDirectory.resolve(storedFilename);
-
-        file.transferTo(destination);
-
-        return storedFilename;
+        return filename;
     }
 
     @Override
