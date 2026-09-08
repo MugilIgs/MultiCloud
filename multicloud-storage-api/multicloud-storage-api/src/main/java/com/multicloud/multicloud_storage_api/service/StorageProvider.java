@@ -1,17 +1,25 @@
 package com.multicloud.multicloud_storage_api.service;
 
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
 
 import java.io.IOException;
-import org.springframework.core.io.Resource;
 
 public interface StorageProvider {
 
-    String upload(MultipartFile file) throws IOException;
+    String upload(
+            byte[] data,
+            String filename
+    ) throws IOException;
 
-    Resource download(String storedFilename) throws IOException;
+    Resource download(
+            String storedFilename
+    ) throws IOException;
 
-    void delete(String storedFilename) throws IOException;
+    void delete(
+            String storedFilename
+    ) throws IOException;
 
-    boolean exists(String storedFilename);
+    boolean exists(
+            String storedFilename
+    );
 }

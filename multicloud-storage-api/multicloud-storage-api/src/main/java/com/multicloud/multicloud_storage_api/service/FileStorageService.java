@@ -15,7 +15,7 @@ public class FileStorageService {
     }
 
     public String storeFile(MultipartFile file) throws IOException {
-        return storageProvider.upload(file);
+        return storageProvider.upload(file.getBytes(), file.getOriginalFilename());
     }
 
     public void deleteFile(String storedFilename) throws IOException {
