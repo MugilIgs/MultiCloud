@@ -71,3 +71,7 @@ application-local.yml
 # Generated archive
 # ---------------------------------------------------------
 multicloud-storage-api.zip
+
+# Project test evidence
+ScreenShots/
+Test Files/
