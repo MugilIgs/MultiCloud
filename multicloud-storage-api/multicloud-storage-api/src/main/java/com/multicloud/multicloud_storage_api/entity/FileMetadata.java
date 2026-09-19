@@ -3,7 +3,9 @@ package com.multicloud.multicloud_storage_api.entity;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
-
+import com.multicloud.multicloud_storage_api.service.StorageProviderType;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 @Entity
 @Table(name = "files")
 public class FileMetadata {
@@ -21,6 +23,11 @@ public class FileMetadata {
     private Long size;
 
     private String storagePath;
+    @Enumerated(EnumType.STRING)
+    private StorageProviderType primaryProvider;
+
+    @Enumerated(EnumType.STRING)
+    private StorageProviderType replicaProvider;
 
     private String userEmail;
 
@@ -87,5 +94,20 @@ public class FileMetadata {
 
     public void setUploadedAt(LocalDateTime uploadedAt) {
         this.uploadedAt = uploadedAt;
+    }
+    public StorageProviderType getPrimaryProvider() {
+        return primaryProvider;
+    }
+
+    public void setPrimaryProvider(StorageProviderType primaryProvider) {
+        this.primaryProvider = primaryProvider;
+    }
+
+    public StorageProviderType getReplicaProvider() {
+        return replicaProvider;
+    }
+
+    public void setReplicaProvider(StorageProviderType replicaProvider) {
+        this.replicaProvider = replicaProvider;
     }
 }

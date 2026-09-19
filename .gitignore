@@ -1,0 +1,73 @@
+# =========================================================
+# Cloud of Clouds - Project Root Git Ignore
+# =========================================================
+
+# ---------------------------------------------------------
+# Old / duplicate repository
+# ---------------------------------------------------------
+MultiCloud/
+
+# ---------------------------------------------------------
+# AWS credentials / private files
+# ---------------------------------------------------------
+AWS/
+*.pem
+*.key
+*.p12
+*.credentials.json
+*credentials.json
+aws-credentials*
+
+# ---------------------------------------------------------
+# Backend - Java / Spring Boot
+# ---------------------------------------------------------
+**/target/
+**/uploads/
+**/*.bin
+
+# Environment / secret configuration
+.env
+.env.*
+application-local.properties
+application-local.yml
+**/application-local.properties
+**/application-local.yml
+
+# Google Cloud credentials
+**/application-default_credentials.json
+**/service-account*.json
+**/*-credentials.json
+
+# ---------------------------------------------------------
+# Frontend - Node / Vite
+# ---------------------------------------------------------
+**/node_modules/
+**/dist/
+**/.vite/
+
+# ---------------------------------------------------------
+# IDE files
+# ---------------------------------------------------------
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated
+.springBeans
+.sts4-cache
+
+# ---------------------------------------------------------
+# Build / temporary files
+# ---------------------------------------------------------
+*.log
+*.tmp
+
+# ---------------------------------------------------------
+# Generated archive
+# ---------------------------------------------------------
+multicloud-storage-api.zip

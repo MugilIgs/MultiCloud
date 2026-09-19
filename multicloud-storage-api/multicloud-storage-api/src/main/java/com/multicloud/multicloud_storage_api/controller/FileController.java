@@ -5,6 +5,8 @@ import com.multicloud.multicloud_storage_api.repository.FileRepository;
 import com.multicloud.multicloud_storage_api.service.StorageProvider;
 import com.multicloud.multicloud_storage_api.service.StorageProviderSelector;
 import com.multicloud.multicloud_storage_api.service.ReplicationService;
+import com.multicloud.multicloud_storage_api.service.StorageProviderType;
+import com.multicloud.multicloud_storage_api.service.AdaptiveStorageProviderService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -25,17 +27,22 @@ public class FileController {
     private final StorageProvider storageProvider;
     private final EncryptionService encryptionService;
     private final ReplicationService replicationService;
+    private final AdaptiveStorageProviderService adaptiveStorageProviderService;
+    private final StorageProviderSelector storageProviderSelector;
 
     public FileController(
             FileRepository fileRepository,
             StorageProviderSelector storageProviderSelector,
             EncryptionService encryptionService,
-            ReplicationService replicationService
+            ReplicationService replicationService,
+            AdaptiveStorageProviderService adaptiveStorageProviderService
     ) {
         this.fileRepository = fileRepository;
         this.storageProvider = storageProviderSelector.getProvider();
         this.encryptionService = encryptionService;
         this.replicationService = replicationService;
+        this.adaptiveStorageProviderService = adaptiveStorageProviderService;
+        this.storageProviderSelector = storageProviderSelector;
     }
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(
@@ -56,24 +63,38 @@ public class FileController {
             byte[] encryptedData =
                     encryptionService.encrypt(file.getInputStream());
 
+            StorageProviderType primaryProviderType =
+                    adaptiveStorageProviderService.selectBestProvider();
+
+            StorageProvider selectedProvider =
+                    storageProviderSelector.getProvider(
+                            primaryProviderType
+                    );
+
             String storedFilename =
-                    storageProvider.upload(
+                    selectedProvider.upload(
                             encryptedData,
                             file.getOriginalFilename()
                     );
-            replicationService.replicate(
-                    encryptedData,
-                    file.getOriginalFilename(),
-                    com.multicloud.multicloud_storage_api.service.StorageProviderType.AZURE
-            );
-
+            String replicaStoredFilename =
+                    replicationService.replicate(
+                            encryptedData,
+                            file.getOriginalFilename(),
+                            primaryProviderType
+                    );
             FileMetadata metadata =
                     new FileMetadata();
 
             metadata.setOriginalFilename(
                     file.getOriginalFilename()
             );
+            metadata.setPrimaryProvider(
+                    primaryProviderType
+            );
 
+            metadata.setReplicaProvider(
+                    replicationService.getReplicationProviderType()
+            );
             metadata.setStoredFilename(
                     storedFilename
             );
@@ -105,8 +126,10 @@ public class FileController {
 
         } catch (Exception e) {
 
+            e.printStackTrace();
+
             return ResponseEntity.internalServerError()
-                    .body("File upload failed");
+                    .body("File upload failed: " + e.getMessage());
         }
     }
 
@@ -148,13 +171,54 @@ public class FileController {
 
         try {
 
-            Resource encryptedResource =
-                    storageProvider.download(
-                            file.getStoredFilename()
+            StorageProvider downloadProvider =
+                    storageProviderSelector.getProvider(
+                            file.getPrimaryProvider()
                     );
 
-            if (!encryptedResource.exists()) {
-                return ResponseEntity.notFound().build();
+            Resource encryptedResource;
+
+            try {
+
+                encryptedResource =
+                        downloadProvider.download(
+                                file.getStoredFilename()
+                        );
+
+                if (!encryptedResource.exists()) {
+                    throw new RuntimeException(
+                            "Primary provider file not found"
+                    );
+                }
+
+            } catch (Exception primaryException) {
+
+                if (file.getReplicaProvider() == null) {
+                    return ResponseEntity.internalServerError()
+                            .body("Primary storage unavailable and no replica exists");
+                }
+
+                StorageProvider replicaProvider =
+                        storageProviderSelector.getProvider(
+                                file.getReplicaProvider()
+                        );
+
+                try {
+
+                    encryptedResource =
+                            replicaProvider.download(
+                                    file.getStoredFilename()
+                            );
+
+                    if (!encryptedResource.exists()) {
+                        return ResponseEntity.notFound().build();
+                    }
+
+                } catch (Exception replicaException) {
+
+                    return ResponseEntity.internalServerError()
+                            .body("File unavailable from both primary and replica");
+                }
             }
 
             byte[] decryptedData =
@@ -188,6 +252,8 @@ public class FileController {
 
         } catch (Exception e) {
 
+            e.printStackTrace();
+
             return ResponseEntity.internalServerError()
                     .body("File download failed");
         }
@@ -215,19 +281,72 @@ public class FileController {
         FileMetadata file =
                 optionalFile.get();
 
+        boolean primaryDeleted = false;
+        boolean replicaDeleted = false;
+
         try {
 
-            storageProvider.delete(
-                    file.getStoredFilename()
-            );
+            // Delete primary copy
+            try {
 
-            fileRepository.delete(file);
+                StorageProvider primaryProvider =
+                        storageProviderSelector.getProvider(
+                                file.getPrimaryProvider()
+                        );
 
-            return ResponseEntity.ok(
-                    "File deleted successfully"
-            );
+                primaryProvider.delete(
+                        file.getStoredFilename()
+                );
+
+                primaryDeleted = true;
+
+            } catch (Exception e) {
+
+                // Primary may already be unavailable.
+                // Continue and attempt replica deletion.
+                System.out.println(
+                        "Primary deletion skipped/failed: "
+                                + e.getMessage()
+                );
+            }
+
+            // Delete replica copy
+            try {
+
+                replicationService.deleteReplica(
+                        file.getStoredFilename()
+                );
+
+                replicaDeleted = true;
+
+            } catch (Exception e) {
+
+                System.out.println(
+                        "Replica deletion failed: "
+                                + e.getMessage()
+                );
+            }
+
+            // Remove database metadata only when both
+            // storage copies have been successfully handled.
+            if (primaryDeleted || replicaDeleted) {
+
+                fileRepository.delete(file);
+
+                return ResponseEntity.ok(
+                        "File deleted successfully"
+                );
+            }
+
+            return ResponseEntity.internalServerError()
+                    .body(
+                            "File deletion failed: " +
+                                    "both primary and replica are unavailable"
+                    );
 
         } catch (Exception e) {
+
+            e.printStackTrace();
 
             return ResponseEntity.internalServerError()
                     .body("File deletion failed");
