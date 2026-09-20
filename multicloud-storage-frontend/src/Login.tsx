@@ -5,7 +5,7 @@ interface LoginProps {
   onLoginSuccess: () => void
 }
 
-const API_URL = 'http://localhost:8080'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('')

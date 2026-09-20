@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import Login from './Login'
 
-const API_URL = 'http://localhost:8080'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024) {
     return `${bytes} B`
